@@ -1,0 +1,5 @@
+SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
+<FilesMatch "^(config.*\.php|.*\.sql|.*\.md)$">
+  Require all denied
+</FilesMatch>
