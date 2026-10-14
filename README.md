@@ -24,6 +24,12 @@ flutter run -d chrome --dart-define=API_URL=http://127.0.0.1/errandly/api/index.
 
 For Android emulator testing, use `10.0.2.2` instead of `127.0.0.1`. A physical phone needs your computer's LAN address. Android debug/profile builds permit the local HTTP API; release builds require an HTTPS backend. Configure the server's allowed `origins` for your Flutter web preview's exact scheme/host/port. The current release preview at port **8089** is allowed. On other ports, set the allowlist explicitly; the API does not use wildcard CORS.
 
+Publishing saves a shared MySQL listing that other runner accounts receive in their next feed refresh. Choose **Requester** or **Runner** on the login screen; the same account can use either role in separate sessions, and a requester cannot accept their own post. Runner mode shows a separate **Your live posts** preview. **Anna/Ben** demo-account selection is also on the login screen, under **Use demo accounts** (or **Continue as Demo User** from Welcome). There are no role or account switches in the signed-in header, feed or Profile. Log out through Profile to choose another role/account. Changing accounts resets area, search and category filters. Database connections use UTC for generated posting timestamps and API deadlines.
+
+The runner feed has **Nearby** and **All locations** choices. Nearby requires an explicitly chosen location (device GPS or a selected map pin) and filters by straight-line distance to pickup: 10 km by default, with 5/10/25 km choices. It sorts the closest pickups first. A long delivery trip can still be nearby when its pickup is close. Posts without pickup pins remain visible in All locations, along with far-away posts; switching back keeps nearest ordering when a location is available. GPS denial or dismissal keeps the existing feed available. No location is requested at launch, and browse coordinates remain session-only. Selecting a city exits Nearby; changing accounts clears browse coordinates and radius settings. The posting form explains how a pickup pin makes the request discoverable in Nearby.
+
+**Use my location** requests a fresh high-priority device fix, preserving its timestamp, reported horizontal accuracy and mock-location indicator in memory. Fixes older than two minutes are rejected. Nearby displays a zoomed map, coordinates, accuracy and update time; the blue dot and accuracy circle represent the device reading. **View or refine my location** opens the larger map; **Use my location** recenters even when coordinates have not changed. Unknown or greater-than-100 m accuracy is labeled approximate. Persisted errand pins still contain coordinates only. An Android emulator reports its configured virtual GPS position, not the computer user's physical position: test actual whereabouts on a physical phone with precise location enabled. Accuracy depends on the device, permissions and GPS reception; the app does not guarantee an exact position.
+
 The browser retains its login in session storage across refreshes. Other platforms retain the current login in memory. All platforms load the saved data when they log in again. The API polls every 5 seconds while the app is in the foreground and refreshes immediately after successful changes or returning to the app. If MySQL is unavailable, a retry banner appears; the app does not silently replace database records with mock data.
 
 For an entirely disconnected fixture demo, use `--dart-define=DEMO_ONLY=true`. Tests use the in-memory store unless they explicitly construct the API-backed store.
@@ -34,7 +40,7 @@ For an entirely disconnected fixture demo, use `--dart-define=DEMO_ONLY=true`. T
 - Errand claims, payment holds, completion, refunds, and wallet updates run in database transactions with row locks. The server checks the authenticated owner or assigned runner, preventing duplicate claims, settlement and refunds.
 - The completion PIN is returned only to the requester. Chat messages, wallet details, notifications and support reports are limited to the relevant account. Phone/email visibility is enforced by the server.
 - Profiles, errands, progress, wallets, wallet entries, messages, notifications, reviews, reports, relationships and saved errands persist in MySQL.
-- The Anna/Ben toggle uses local demo sessions. Set `demo` to `false` or `ERRANDLY_DEMO=0` to disable account switching, simulated verification/payments, expiry controls and support resolution. Actual proof uploads remain available for authenticated participants. Demo API actions are restricted to loopback clients. Do not deploy with demo mode enabled.
+- Anna/Ben selection at login uses local demo sessions. Set `demo` to `false` or `ERRANDLY_DEMO=0` to disable demo login, simulated verification/payments, expiry controls and support resolution. Actual proof uploads remain available for authenticated participants. Demo API actions are restricted to loopback clients. Do not deploy with demo mode enabled.
 - This remains a development application. Real payment reconciliation, identity verification, file storage, password-reset email, production HTTPS/session hardening and abuse controls still need their corresponding services.
 
 ## Logo and opening intro
@@ -79,7 +85,7 @@ With Apache running, open `http://localhost/errandly/build/web/`.
 6. Use **View as Anna** under the task's demo controls. Only the requester sees the randomly generated six-digit completion PIN.
 7. Switch back to Ben, enter the PIN, and verify the handoff. The runner fee is still locked.
 8. Switch to Anna and choose **Yes, Complete Errand**. Ben earns **40 CY** plus a separate **₱45** purchase reimbursement; Anna receives a separate **₱5** refund. The service fee is **5 CY**. Duplicate confirmation cannot settle funds twice. Older errands with coin purchase budgets keep their original terms.
-9. Check the wallet history, notifications, completed errands, and reviews from each account. The **Anna / Requester — Ben / Runner** toggle stays above every main screen, so you can switch accounts without logging out. Switching loads that account's saved errands, conversations, and separate wallet balance from MySQL. Each account can still use either role.
+9. Check wallet history, notifications, completed errands, and reviews from each account. Use **Profile → Log out**, then choose Anna/Requester or Ben/Runner in the demo login. Logging in loads that account's saved errands, conversations and separate MySQL wallet balance. Each account can use either role selected at login.
 
 Anna, Maria, and Joshua use the same `demo123` password with their corresponding first name at `example.com`.
 
@@ -87,9 +93,9 @@ Anna, Maria, and Joshua use the same `demo123` password with their corresponding
 
 - Mobile navigation uses Home (Find Errands for runners) / My Errands / Messages / Wallet / Profile, with no duplicate drawer. Desktop uses the sidebar instead of the bottom bar.
 - Requesters post from Home or My Errands and track their own requests. Runners find available work that excludes their own posts and manage current jobs in the Active Jobs tab inside My Errands. Wallet priorities still follow the selected role.
-- Profile links to Settings, Saved errands, Friends & favorites, and Safety center. Secondary pages include a return to Profile; posting returns to My Errands. Role and demo-account switches remain available in the header.
+- Profile links to Settings, Saved errands, Friends & favorites, and Safety center. Secondary pages include a return to Profile; posting returns to My Errands. Role and demo-account choices are available only at login.
 - My Requests separates Posted, In Progress, Awaiting Confirmation, Completed and Cancelled; My Jobs separates Accepted, In Progress, Awaiting Payment, Completed and Cancelled. Expired posts appear in Cancelled with an expiry explanation.
-- The Requester / Runner switch changes the view of the same account. Demo account buttons switch between Anna and Ben to test both participants while retaining their session data. Task controls and completion PIN access follow the actual task owner and assigned runner.
+- Choose Requester/Runner and the optional Anna/Ben demo account at login. Log out to change sessions. Task controls and completion PIN access follow the actual task owner and assigned runner.
 - Both modes share one account wallet. Each view prioritizes its relevant transactions; All activity reveals the complete account history.
 
 - Welcome, login, registration, simulated reset email, and identity verification.
@@ -106,7 +112,7 @@ Anna, Maria, and Joshua use the same `demo123` password with their corresponding
 
 ## Mobile design and private inquiries
 
-The phone layout uses a compact green header, searchable category chips, rounded errand cards, and bottom sheets for details, acceptance, notifications, and chat. Task progress stays compact, with the full timestamp history available on expansion.
+The phone layout uses a compact green header, a category dropdown with an **All categories** reset choice, rounded errand cards, and bottom sheets for details, acceptance, notifications, and chat. The category dropdown is also used on desktop and Saved errands. Task progress stays compact, with the full timestamp history available on expansion.
 
 Runners can privately ask a requester about an available errand before accepting it. Each requester/runner pair has its own inbox thread; accepting the job does not expose other runners' inquiries. Existing assigned-task messages retain their visibility. Run `php api/migrate.php` when updating an existing database to add the private-message recipient field.
 

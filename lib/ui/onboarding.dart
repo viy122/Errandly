@@ -143,7 +143,7 @@ class _OnboardingGuideState extends State<OnboardingGuide> {
       'A secure handoff, every time.',
     ];
     final descriptions = [
-      'Request help when you need it, or earn by helping someone nearby. Switch modes whenever you like.',
+      'Request help when you need it, or earn by helping someone nearby. Choose Requester or Runner when you log in.',
       'Your wallet pays the runner and service fee in CY. Money for the item is funded and reimbursed separately in pesos.',
       'The requester shares the PIN after receiving the item. Verification comes first; payment release follows confirmation.',
     ];

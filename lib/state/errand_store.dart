@@ -49,9 +49,44 @@ class ErrandStore extends ChangeNotifier {
   late final MapServices maps = mapServices ?? MapServices(api: api);
   // Device location is session-only and never sent by nearest sorting.
   GeoPoint? browsingPosition;
-  void setBrowsingPosition(GeoPoint? point) {
+  String? browsingPositionLabel;
+  bool browseNearby = false;
+  double nearbyRadiusKm = 10;
+  void setBrowsingPosition(GeoPoint? point, {String? label}) {
+    if (point != null && !point.valid) {
+      throw StateError('Choose a valid location.');
+    }
     browsingPosition = point;
+    browsingPositionLabel = point == null
+        ? null
+        : label ?? 'Your current location';
+    if (point == null) browseNearby = false;
     notifyListeners();
+  }
+
+  void setBrowseNearby(bool nearby) {
+    if (nearby && browsingPosition == null) {
+      throw StateError('Set a location before browsing nearby errands.');
+    }
+    browseNearby = nearby;
+    browseArea = 'All locations';
+    notifyListeners();
+  }
+
+  void setNearbyRadius(double km) {
+    if (!const [5.0, 10.0, 25.0].contains(km)) {
+      throw StateError('Choose a radius of 5, 10 or 25 km.');
+    }
+    nearbyRadiusKm = km;
+    notifyListeners();
+  }
+
+  void _resetBrowseLocation() {
+    browsingPosition = null;
+    browsingPositionLabel = null;
+    browseNearby = false;
+    nearbyRadiusKm = 10;
+    browseArea = 'All locations';
   }
 
   bool busy = false,
@@ -155,6 +190,7 @@ class ErrandStore extends ChangeNotifier {
 
   void _hydrate(Map<String, dynamic> state) {
     final previous = {for (final e in errands) e.id: e};
+    if (currentId != state['currentId']) _resetBrowseLocation();
     currentId = state['currentId'];
     demoEnabled = state['demo'];
     isSupport = state['support'] == true;
@@ -279,6 +315,7 @@ class ErrandStore extends ChangeNotifier {
   ];
   void setBrowseArea(String area) {
     browseArea = area;
+    browseNearby = false;
     notifyListeners();
   }
 
@@ -300,16 +337,25 @@ class ErrandStore extends ChangeNotifier {
   List<Errand> get activeJobs => jobs.where((e) => !e.terminal).toList();
   List<Errand> get runnerOpportunities =>
       available.where((e) => e.ownerId != currentId).toList();
+  List<Errand> get runnerListingsEverywhere =>
+      availableEverywhere.where((e) => e.ownerId != currentId).toList();
+  List<Errand> get liveRequests => requests.where((e) => e.available).toList();
   double get securedPayments =>
       requests.where((e) => !e.terminal).fold(0, (total, e) => total + e.total);
-  List<Errand> get available => errands
+  List<Errand> get availableEverywhere => errands
       .where(
-        (e) =>
-            e.available &&
-            (browseArea == 'All locations' || e.area == browseArea) &&
-            !(blocked[currentId] ?? {}).contains(e.ownerId),
+        (e) => e.available && !(blocked[currentId] ?? {}).contains(e.ownerId),
       )
       .toList();
+  List<Errand> get available => availableEverywhere.where((e) {
+    if (browseNearby) {
+      final origin = browsingPosition, pin = e.pickupPoint;
+      return origin != null &&
+          pin != null &&
+          origin.metersTo(pin) <= nearbyRadiusKm * 1000;
+    }
+    return browseArea == 'All locations' || e.area == browseArea;
+  }).toList();
   double get locked => mine
       .where((e) => e.ownerId == currentId && !e.terminal)
       .fold(0, (v, e) => v + (e.pesoPurchase ? 0 : e.budget) + e.fee);
@@ -332,7 +378,7 @@ class ErrandStore extends ChangeNotifier {
   FutureOr<void> demo([String id = 'ben']) {
     if (api != null) {
       return _perform('demo', {'userId': id}).then((_) async {
-        browsingPosition = null;
+        _resetBrowseLocation();
         preferredRunnerId = null;
         await preferences.load();
         runnerMode = preferences.roleFor(id) ?? id == 'ben';
@@ -341,7 +387,7 @@ class ErrandStore extends ChangeNotifier {
     }
     preferredRunnerId = null;
     currentId = id;
-    browsingPosition = null;
+    _resetBrowseLocation();
     runnerMode = preferences.roleFor(id) ?? id == 'ben';
     expireDue();
     notifyListeners();
@@ -352,14 +398,14 @@ class ErrandStore extends ChangeNotifier {
       return _perform('logout').then((_) {
         api!.clearSession();
         currentId = null;
-        browsingPosition = null;
+        _resetBrowseLocation();
         preferredRunnerId = null;
         notifyListeners();
       });
     }
     preferredRunnerId = null;
     currentId = null;
-    browsingPosition = null;
+    _resetBrowseLocation();
     notifyListeners();
   }
 
@@ -386,7 +432,7 @@ class ErrandStore extends ChangeNotifier {
         'email': email.trim(),
         'password': password,
       }).then((_) async {
-        browsingPosition = null;
+        _resetBrowseLocation();
         await preferences.load();
         runnerMode = preferences.roleFor(currentId) ?? currentId == 'ben';
         notifyListeners();
@@ -401,7 +447,7 @@ class ErrandStore extends ChangeNotifier {
       throw StateError('Email or password is incorrect.');
     }
     currentId = found.first.id;
-    browsingPosition = null;
+    _resetBrowseLocation();
     runnerMode = preferences.roleFor(currentId) ?? currentId == 'ben';
     expireDue();
     notifyListeners();

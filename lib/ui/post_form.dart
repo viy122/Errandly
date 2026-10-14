@@ -301,7 +301,7 @@ class _PostFormState extends State<PostForm> {
     if (await attempt(
       context,
       () => widget.store.post(e, payment, budgetMethod: budgetPayment),
-      'Payment Secured. Your errand is published!',
+      'Published! Other runners can now find and accept your errand.',
     )) {
       _published = true;
       try {
@@ -709,7 +709,7 @@ class _PostFormState extends State<PostForm> {
                       validator: (_) => null,
                     ),
                     note(
-                      'Addresses remain editable. Changing an address clears its map pin and road estimate. Manual distances work for any delivery method.',
+                      'Add a pickup pin so nearby runners can find this post. Posts with manual addresses are still available in All locations. Changing an address clears its pin and road estimate.',
                       icon: Icons.location_on_outlined,
                     ),
                   ],

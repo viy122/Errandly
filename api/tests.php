@@ -19,6 +19,10 @@ try {
     $id = 'test_' . bin2hex(random_bytes(8));
     $post = ['errand'=>['id'=>$id,'title'=>'Database integration test','category'=>'Delivery','description'=>'Transactional test; this record is rolled back.','pickup'=>'Quezon City','destination'=>'Cavite','area'=>'Metro Manila','transport'=>'Motorcycle','instructions'=>'Call on arrival.','budget'=>50,'fee'=>40,'distance'=>65000,'deadline'=>gmdate('c',time()+86400),'urgent'=>false],'method'=>'Errandly Wallet','budgetMethod'=>'GCash Simulation'];
     command($db,'anna','post',$post);
+    check(query($db,'SELECT @@session.time_zone')->fetchColumn() === '+00:00','Database-generated posting times must use UTC like API deadlines.');
+    $runnerListing = array_values(array_filter(snapshot($db,'ben')['errands'],fn($task)=>$task['id']===$id));
+    check(count($runnerListing)===1 && $runnerListing[0]['ownerId']==='anna' && $runnerListing[0]['runnerId']===null && $runnerListing[0]['status']==='posted','A newly published requester post must appear in another runner snapshot before acceptance.');
+    check($runnerListing[0]['area']==='Metro Manila' && strtotime($runnerListing[0]['deadline'])>time(),'Runner snapshot must preserve the listing area and future deadline.');
     check((float)query($db,'SELECT available FROM wallets WHERE user_id=?',['anna'])->fetchColumn() === $anna-45,'Post must secure coin fees independently of the peso budget.');
     rejects(fn()=>command($db,'anna','accept',['errandId'=>$id]),'Requester cannot accept own task.');
     command($db,'ben','accept',['errandId'=>$id]);

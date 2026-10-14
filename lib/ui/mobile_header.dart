@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/entities.dart';
 import '../state/errand_store.dart';
 import 'components.dart';
-import 'role_dashboard.dart';
 import 'location_picker.dart';
 
 class MobileHeader extends StatelessWidget {
@@ -73,7 +72,9 @@ class MobileHeader extends StatelessWidget {
                           Flexible(
                             child: Text(
                               store.runnerMode
-                                  ? store.browseArea
+                                  ? store.browseNearby
+                                        ? 'Nearby · ${store.nearbyRadiusKm.toInt()} km'
+                                        : store.browseArea
                                   : store.user.location,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -111,8 +112,6 @@ class MobileHeader extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        RoleModeSwitch(store: store, light: true),
         const SizedBox(height: 10),
         Material(
           color: lime,

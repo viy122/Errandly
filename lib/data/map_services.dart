@@ -75,15 +75,29 @@ Future<GeoPoint> readDevicePosition() async {
   try {
     final p = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
+        accuracy: LocationAccuracy.bestForNavigation,
         timeLimit: Duration(seconds: 15),
       ),
     );
-    return GeoPoint(p.latitude, p.longitude);
+    final age = DateTime.now().difference(p.timestamp);
+    if (age > const Duration(minutes: 2) || age < const Duration(minutes: -1)) {
+      throw StateError(
+        'Your device returned an old location. Tap Use my location again to get a fresh position.',
+      );
+    }
+    return DeviceLocation(
+      p.latitude,
+      p.longitude,
+      recordedAt: p.timestamp,
+      accuracyMeters: p.accuracy.isFinite && p.accuracy > 0 ? p.accuracy : null,
+      isMocked: p.isMocked,
+    );
   } on TimeoutException {
     throw StateError(
       'Could not get your location in time. Try again or choose a map pin.',
     );
+  } on StateError {
+    rethrow;
   } catch (_) {
     throw StateError(
       'Could not read device location. Try again or choose a map pin.',

@@ -66,7 +66,8 @@ void main() {
       await tester.pumpWidget(ErrandlyApp(store: s));
       await tester.pumpAndSettle();
       expect(find.byType(Marketplace), findsOneWidget);
-      expect(find.text(request.title), findsNothing);
+      expect(find.text(request.title), findsOneWidget);
+      expect(find.text('Your live posts'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('nav-1')));
       await tester.pumpAndSettle();
       expect(find.byType(ActiveJobsPage), findsOneWidget);
@@ -78,7 +79,7 @@ void main() {
         find.text(width >= 980 ? 'Find errands' : 'Find Errands').first,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('mode-requester')));
+      s.setMode(false);
       await tester.pumpAndSettle();
       expect(find.byType(RequesterDashboard), findsOneWidget);
       expect(find.text(request.title), findsOneWidget);
@@ -92,7 +93,10 @@ void main() {
       await tester.tap(postButton);
       await tester.pumpAndSettle();
       expect(find.text('Errand title'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('mode-runner')));
+      s.setMode(true);
+      await tester.pumpAndSettle();
+      expect(find.byType(Marketplace), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('nav-1')));
       await tester.pumpAndSettle();
       expect(find.byType(ActiveJobsPage), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -212,12 +216,16 @@ void main() {
       expect(find.text('YOUR JOB'), findsOneWidget);
       expect(find.text('Start Errand'), findsOneWidget);
       expect(find.text('Cancel errand'), findsNothing);
+      expect(find.text('View as Anna'), findsNothing);
+      expect(find.text('View as Ben'), findsNothing);
       s.demo('anna');
       s.setMode(true);
       await tester.pumpAndSettle();
       expect(find.text('YOUR REQUEST'), findsOneWidget);
       expect(find.text('Start Errand'), findsNothing);
       expect(find.text('Cancel errand'), findsOneWidget);
+      expect(find.text('View as Anna'), findsNothing);
+      expect(find.text('View as Ben'), findsNothing);
       s.demo('ben');
       s.advance(job);
       s.advance(job);

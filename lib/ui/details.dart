@@ -646,24 +646,6 @@ class _TaskDetailsState extends State<TaskDetails> {
               onPressed: () => reportDialog(context, s, e),
               child: const Text('Report Post / Problem'),
             ),
-            if (e.runnerId != null && s.isDemoAccount) ...[
-              const Divider(),
-              const Text(
-                'DEMO CONTROLS · Experience both sides',
-                style: TextStyle(fontSize: 10, color: muted, letterSpacing: .7),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final id in {e.ownerId, e.runnerId!})
-                    OutlinedButton(
-                      onPressed: () => s.quietly(() => s.demo(id)),
-                      child: Text('View as ${s.users[id]!.firstName}'),
-                    ),
-                ],
-              ),
-            ],
           ],
         ),
       );

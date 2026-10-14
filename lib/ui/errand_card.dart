@@ -14,6 +14,7 @@ class ErrandCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = errand, owner = store.users[errand.ownerId]!;
+    final ageMinutes = DateTime.now().difference(e.postedAt).inMinutes;
     final eligible =
         store.runnerMode && e.available && e.ownerId != store.currentId;
     return Panel(
@@ -57,7 +58,7 @@ class ErrandCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${DateTime.now().difference(e.postedAt).inMinutes}m ago',
+                '${ageMinutes < 0 ? 0 : ageMinutes}m ago',
                 style: const TextStyle(color: muted, fontSize: 10),
               ),
             ],

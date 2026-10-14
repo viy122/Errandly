@@ -7,6 +7,8 @@ import 'package:errandly/ui/auth.dart';
 import 'package:errandly/ui/post_form.dart';
 import 'package:errandly/state/errand_store.dart';
 
+import 'login_helpers.dart';
+
 void main() {
   testWidgets(
     'posting accepts custom addresses, kilometres and a multi-day deadline',
@@ -78,7 +80,7 @@ void main() {
   );
   for (final width in [375.0, 1440.0]) {
     testWidgets(
-      'demo toggle switches accounts without losing shared errands at $width',
+      'demo login switches accounts without losing shared errands at $width',
       (tester) async {
         tester.view.physicalSize = Size(width, 1000);
         tester.view.devicePixelRatio = 1;
@@ -93,14 +95,16 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('nav-3')));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('demo-account-anna')));
+        await demoLogin(tester, s, 'anna');
+        await tester.tap(find.byKey(const ValueKey('nav-3')));
         await tester.pumpAndSettle();
         expect(s.currentId, 'anna');
         expect(s.runnerMode, isFalse);
         expect(s.wallet.available, annaBalance);
         expect(find.byType(WalletPage), findsOneWidget);
         expect(e.runnerId, 'ben');
-        await tester.tap(find.byKey(const ValueKey('demo-account-ben')));
+        await demoLogin(tester, s, 'ben');
+        await tester.tap(find.byKey(const ValueKey('nav-3')));
         await tester.pumpAndSettle();
         expect(s.currentId, 'ben');
         expect(s.runnerMode, isTrue);
@@ -175,10 +179,9 @@ void main() {
     }
   });
   testWidgets('welcome can open the interactive campus demo', (tester) async {
-    await tester.pumpWidget(ErrandlyApp(store: ErrandStore()));
-    await tester.ensureVisible(find.text('Continue as Demo User'));
-    await tester.tap(find.text('Continue as Demo User'));
-    await tester.pumpAndSettle();
+    final store = ErrandStore();
+    await tester.pumpWidget(ErrandlyApp(store: store));
+    await demoLogin(tester, store, 'ben');
     expect(find.text('Hey, Ben 👋'), findsOneWidget);
     expect(find.text('Buy 1 Yellow Pad'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -210,7 +213,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: label);
       }
-      await tester.tap(find.byKey(const ValueKey('mode-requester')));
+      s.setMode(false);
       await tester.pumpAndSettle();
       for (final label
           in width >= 980

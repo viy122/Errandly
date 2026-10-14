@@ -89,7 +89,10 @@ class Welcome extends StatelessWidget {
                 TextButton(
                   onPressed: store.busy || !store.demoEnabled
                       ? null
-                      : () => attempt(context, () => store.demo()),
+                      : () => sheet(
+                          context,
+                          AuthForm(store: store, demoOnly: true),
+                        ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -162,9 +165,15 @@ class Welcome extends StatelessWidget {
 }
 
 class AuthForm extends StatefulWidget {
-  const AuthForm({super.key, required this.store, this.signup = false});
+  const AuthForm({
+    super.key,
+    required this.store,
+    this.signup = false,
+    this.demoOnly = false,
+  });
   final ErrandStore store;
   final bool signup;
+  final bool demoOnly;
   @override
   State<AuthForm> createState() => _AuthFormState();
 }
@@ -178,6 +187,9 @@ class _AuthFormState extends State<AuthForm> {
       confirm = TextEditingController(),
       area = TextEditingController();
   bool agreed = false, photo = false, identityId = false;
+  bool runner = false;
+  String demoAccount = 'anna';
+  late bool demoLogin = widget.demoOnly;
   @override
   void dispose() {
     for (final c in [name, email, phone, password, confirm, area]) {
@@ -187,7 +199,7 @@ class _AuthFormState extends State<AuthForm> {
   }
 
   Future<void> submit() async {
-    if (!form.currentState!.validate()) {
+    if (!demoLogin && !form.currentState!.validate()) {
       return;
     }
     if (widget.signup && (!agreed || !identityId)) {
@@ -197,9 +209,11 @@ class _AuthFormState extends State<AuthForm> {
       );
       return;
     }
-    if (await attempt(context, () {
-      if (widget.signup) {
-        return widget.store.register(
+    if (await attempt(context, () async {
+      if (demoLogin) {
+        await widget.store.demo(demoAccount);
+      } else if (widget.signup) {
+        await widget.store.register(
           UserProfile(
             id: 'u${DateTime.now().microsecondsSinceEpoch}',
             name: name.text.trim(),
@@ -213,8 +227,9 @@ class _AuthFormState extends State<AuthForm> {
           )..photo = photo,
         );
       } else {
-        return widget.store.login(email.text, password.text);
+        await widget.store.login(email.text, password.text);
       }
+      widget.store.setMode(runner);
     })) {
       if (mounted) Navigator.pop(context);
     }
@@ -237,7 +252,11 @@ class _AuthFormState extends State<AuthForm> {
             children: [
               Expanded(
                 child: Text(
-                  widget.signup ? 'Join Errandly' : 'Welcome back',
+                  demoLogin
+                      ? 'Try Errandly'
+                      : widget.signup
+                      ? 'Join Errandly'
+                      : 'Welcome back',
                   style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
@@ -253,106 +272,178 @@ class _AuthFormState extends State<AuthForm> {
           ),
           const SizedBox(height: 8),
           Text(
-            widget.signup
+            demoLogin
+                ? 'Choose a demo account and how you want to use Errandly.'
+                : widget.signup
                 ? 'A single account to request and run errands.'
-                : 'Demo login: ben@example.com / demo123',
+                : 'Choose your role for this session, then log in.',
             style: const TextStyle(color: muted, fontSize: 12),
           ),
           const SizedBox(height: 24),
-          if (widget.signup) field('Full name', name),
-          field(
-            'Email',
-            email,
-            type: TextInputType.emailAddress,
-            validator: (v) =>
-                v != null && RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v)
+          const Text(
+            'Continue as',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          SegmentedButton<bool>(
+            key: const ValueKey('login-role'),
+            segments: const [
+              ButtonSegment(
+                value: false,
+                label: Text('Requester'),
+                icon: Icon(Icons.add_task_outlined),
+              ),
+              ButtonSegment(
+                value: true,
+                label: Text('Runner'),
+                icon: Icon(Icons.directions_run),
+              ),
+            ],
+            selected: {runner},
+            onSelectionChanged: widget.store.busy
                 ? null
-                : 'Enter a valid email',
+                : (values) => setState(() => runner = values.single),
           ),
-          if (widget.signup)
-            field(
-              'Phone number',
-              phone,
-              type: TextInputType.phone,
-              validator: (v) => RegExp(r'^\+?\d{7,15}$').hasMatch(v ?? '')
-                  ? null
-                  : 'Use 7–15 digits, with an optional + country code',
-            ),
-          field(
-            'Password',
-            password,
-            password: true,
-            validator: (v) =>
-                v != null && v.length >= 6 ? null : 'Use at least 6 characters',
+          const SizedBox(height: 10),
+          Text(
+            runner
+                ? 'Find errands, accept jobs and earn.'
+                : 'Post errands and track your requests.',
+            style: const TextStyle(fontSize: 12, color: muted),
           ),
-          if (widget.signup) ...[
-            field(
-              'Confirm password',
-              confirm,
-              password: true,
-              validator: (v) =>
-                  v == password.text ? null : 'Passwords must match',
-            ),
-            field(
-              'Home area / city',
-              area,
-              hint: 'e.g. Makati City or your province',
-            ),
-            OutlinedButton.icon(
-              onPressed: () => setState(() => photo = !photo),
-              icon: Icon(
-                photo ? Icons.check_circle : Icons.add_a_photo_outlined,
-              ),
-              label: Text(
-                photo
-                    ? 'Profile photo attached (sample)'
-                    : 'Attach sample profile photo',
-              ),
+          const SizedBox(height: 20),
+          if (demoLogin) ...[
+            const Text(
+              'Demo account',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () => setState(() => identityId = !identityId),
-              icon: Icon(
-                identityId ? Icons.check_circle : Icons.badge_outlined,
-              ),
-              label: Text(
-                identityId
-                    ? 'Identity document attached (sample)'
-                    : 'Attach sample identity document',
-              ),
+            SegmentedButton<String>(
+              key: const ValueKey('login-demo-account'),
+              segments: const [
+                ButtonSegment(value: 'anna', label: Text('Anna')),
+                ButtonSegment(value: 'ben', label: Text('Ben')),
+              ],
+              selected: {demoAccount},
+              onSelectionChanged: widget.store.busy
+                  ? null
+                  : (values) => setState(() {
+                      demoAccount = values.single;
+                      runner = demoAccount == 'ben';
+                    }),
             ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: agreed,
-              onChanged: (v) => setState(() => agreed = v!),
-              title: const Text(
-                'I agree to the Terms and Privacy Policy',
-                style: TextStyle(fontSize: 12),
-              ),
+          ] else ...[
+            if (widget.signup) field('Full name', name),
+            field(
+              'Email',
+              email,
+              type: TextInputType.emailAddress,
+              validator: (v) =>
+                  v != null && RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v)
+                  ? null
+                  : 'Enter a valid email',
             ),
-            TextButton(
-              onPressed: () => sheet(
-                context,
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                    'Community terms & privacy\n\nUse your own identity. Meet in public, well-lit places. Keep payments inside Errandly. Treat other users with respect.\n\nContact details are private by default. The connected app saves data in its MySQL database through an authenticated API. Verification, file attachments and payments are still simulated. Use sample information while testing.',
-                  ),
+            if (widget.signup)
+              field(
+                'Phone number',
+                phone,
+                type: TextInputType.phone,
+                validator: (v) => RegExp(r'^\+?\d{7,15}$').hasMatch(v ?? '')
+                    ? null
+                    : 'Use 7–15 digits, with an optional + country code',
+              ),
+            field(
+              'Password',
+              password,
+              password: true,
+              validator: (v) => v != null && v.length >= 6
+                  ? null
+                  : 'Use at least 6 characters',
+            ),
+            if (widget.signup) ...[
+              field(
+                'Confirm password',
+                confirm,
+                password: true,
+                validator: (v) =>
+                    v == password.text ? null : 'Passwords must match',
+              ),
+              field(
+                'Home area / city',
+                area,
+                hint: 'e.g. Makati City or your province',
+              ),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => photo = !photo),
+                icon: Icon(
+                  photo ? Icons.check_circle : Icons.add_a_photo_outlined,
+                ),
+                label: Text(
+                  photo
+                      ? 'Profile photo attached (sample)'
+                      : 'Attach sample profile photo',
                 ),
               ),
-              child: const Text('Read terms & privacy'),
-            ),
-          ] else
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => identityId = !identityId),
+                icon: Icon(
+                  identityId ? Icons.check_circle : Icons.badge_outlined,
+                ),
+                label: Text(
+                  identityId
+                      ? 'Identity document attached (sample)'
+                      : 'Attach sample identity document',
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: agreed,
+                onChanged: (v) => setState(() => agreed = v!),
+                title: const Text(
+                  'I agree to the Terms and Privacy Policy',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+              TextButton(
+                onPressed: () => sheet(
+                  context,
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'Community terms & privacy\n\nUse your own identity. Meet in public, well-lit places. Keep payments inside Errandly. Treat other users with respect.\n\nContact details are private by default. The connected app saves data in its MySQL database through an authenticated API. Verification, file attachments and payments are still simulated. Use sample information while testing.',
+                    ),
+                  ),
+                ),
+                child: const Text('Read terms & privacy'),
+              ),
+            ] else
+              TextButton(
+                onPressed: () =>
+                    sheet(context, ForgotPassword(store: widget.store)),
+                child: const Text('Forgot password?'),
+              ),
+          ],
+          if (!widget.signup && widget.store.demoEnabled) ...[
+            const SizedBox(height: 12),
             TextButton(
-              onPressed: () =>
-                  sheet(context, ForgotPassword(store: widget.store)),
-              child: const Text('Forgot password?'),
+              onPressed: widget.store.busy
+                  ? null
+                  : () => setState(() => demoLogin = !demoLogin),
+              child: Text(
+                demoLogin ? 'Use email and password' : 'Use demo accounts',
+              ),
             ),
+          ],
           const SizedBox(height: 16),
           AsyncActionButton(
             enabled: !widget.store.busy,
             onPressed: submit,
-            label: widget.signup ? 'Create account' : 'Log in',
+            label: demoLogin
+                ? 'Enter demo'
+                : widget.signup
+                ? 'Create account'
+                : 'Log in',
             loadingLabel: widget.signup ? 'Creating account…' : 'Signing in…',
           ),
         ],

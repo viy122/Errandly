@@ -4,6 +4,7 @@ import '../data/map_services.dart';
 import '../models/geo.dart';
 import 'components.dart';
 import 'errand_map.dart';
+import 'location_status.dart';
 
 class MapPointPicker extends StatefulWidget {
   const MapPointPicker({
@@ -12,10 +13,12 @@ class MapPointPicker extends StatefulWidget {
     required this.title,
     this.initial,
     this.initialAddress = '',
+    this.forBrowsing = false,
   });
   final MapServices services;
   final String title, initialAddress;
   final GeoPoint? initial;
+  final bool forBrowsing;
   @override
   State<MapPointPicker> createState() => _MapPointPickerState();
 }
@@ -23,7 +26,15 @@ class MapPointPicker extends StatefulWidget {
 class _MapPointPickerState extends State<MapPointPicker> {
   late final search = TextEditingController(text: widget.initialAddress);
   late GeoPoint? point = widget.initial;
-  late String label = widget.initialAddress;
+  late GeoPoint? devicePosition = widget.initial is DeviceLocation
+      ? widget.initial
+      : null;
+  int recenter = 0;
+  late String label = widget.initialAddress.isNotEmpty
+      ? widget.initialAddress
+      : widget.initial == null
+      ? ''
+      : 'Selected map location';
   List<MapPlace> results = [];
   bool working = false, searched = false;
   String? error;
@@ -46,8 +57,12 @@ class _MapPointPickerState extends State<MapPointPicker> {
         if (mounted) {
           setState(() {
             point = p;
-            label = 'Current location';
+            devicePosition = p;
+            recenter++;
+            label =
+                'Current location (${p.latitude.toStringAsFixed(6)}, ${p.longitude.toStringAsFixed(6)})';
             results = [];
+            searched = false;
           });
         }
       } else {
@@ -161,7 +176,13 @@ class _MapPointPickerState extends State<MapPointPicker> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: ErrandMap(
+                key: ValueKey(recenter),
                 points: point == null ? [] : [point!],
+                deviceLocation: devicePosition,
+                focusZoom:
+                    devicePosition != null && identical(point, devicePosition)
+                    ? 17
+                    : null,
                 onPick: (p) => setState(() {
                   point = p;
                   label = search.text.trim().isEmpty
@@ -172,6 +193,7 @@ class _MapPointPickerState extends State<MapPointPicker> {
             ),
           ),
           const SizedBox(height: 8),
+          if (point != null) LocationStatus(point: point!),
           Text(
             point == null
                 ? 'Search and choose a result, or tap the map to place a pin.'
@@ -181,9 +203,11 @@ class _MapPointPickerState extends State<MapPointPicker> {
             style: const TextStyle(fontSize: 11, color: muted),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Search uses OpenStreetMap; map pins are saved with your errand.',
-            style: TextStyle(fontSize: 10, color: muted),
+          Text(
+            widget.forBrowsing
+                ? 'Choose a location to search nearby pickup pins.'
+                : 'Search uses OpenStreetMap; map pins are saved with your errand.',
+            style: const TextStyle(fontSize: 10, color: muted),
           ),
           const SizedBox(height: 8),
           FilledButton(

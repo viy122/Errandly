@@ -40,8 +40,8 @@ void main() {
           isTrue,
         );
       }
-        semantics.dispose();
-        await tester.tap(find.byKey(const ValueKey('nav-5')));
+      semantics.dispose();
+      await tester.tap(find.byKey(const ValueKey('nav-5')));
       await tester.pumpAndSettle();
       expect(find.byType(MessagesPage), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('nav-1')));
@@ -78,7 +78,7 @@ void main() {
         if (label == 'Saved errands') {
           expect(find.byType(Marketplace), findsOneWidget);
           // Saved errands remains accessible after switching the view mode.
-          await tester.tap(find.byKey(const ValueKey('mode-requester')));
+          s.setMode(false);
           await tester.pumpAndSettle();
           expect(find.text('Your saved errands'), findsOneWidget);
         } else if (label == 'Friends & favorites') {

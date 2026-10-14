@@ -20,10 +20,12 @@ function config(): array {
 }
 function db(bool $withDatabase = true): PDO {
     $c = config();
-    return new PDO('mysql:host=' . $c['host'] . ';port=' . $c['port'] .
+    $db = new PDO('mysql:host=' . $c['host'] . ';port=' . $c['port'] .
         ($withDatabase ? ';dbname=' . $c['database'] : '') . ';charset=utf8mb4',
         $c['username'], $c['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false]);
+    $db->exec("SET time_zone = '+00:00'");
+    return $db;
 }
 function query(PDO $db, string $sql, array $params = []): PDOStatement {
     $q = $db->prepare($sql);

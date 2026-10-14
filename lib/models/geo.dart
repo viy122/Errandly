@@ -43,6 +43,24 @@ class MapPlace {
       MapPlace(data['label'] as String, GeoPoint.parse(data['point'])!);
 }
 
+/// Device metadata stays in memory; saved map pins contain coordinates only.
+class DeviceLocation extends GeoPoint {
+  const DeviceLocation(
+    super.latitude,
+    super.longitude, {
+    required this.recordedAt,
+    required this.accuracyMeters,
+    this.isMocked = false,
+  });
+  final DateTime recordedAt;
+  final double? accuracyMeters;
+  final bool isMocked;
+  bool get approximate => accuracyMeters == null || accuracyMeters! > 100;
+  String get accuracyLabel => accuracyMeters == null
+      ? 'Accuracy unavailable'
+      : 'Accuracy: ±${accuracyMeters!.ceil()} m';
+}
+
 class RoadRoute {
   const RoadRoute({
     required this.meters,

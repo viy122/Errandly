@@ -12,9 +12,13 @@ class ErrandMap extends StatefulWidget {
     required this.points,
     this.route = const [],
     this.onPick,
+    this.deviceLocation,
+    this.focusZoom,
   });
   final List<GeoPoint> points, route;
   final ValueChanged<GeoPoint>? onPick;
+  final GeoPoint? deviceLocation;
+  final double? focusZoom;
   @override
   State<ErrandMap> createState() => _ErrandMapState();
 }
@@ -38,7 +42,7 @@ class _ErrandMapState extends State<ErrandMap> {
             initialCenter: focus.isEmpty
                 ? const LatLng(14.5995, 120.9842)
                 : latLng(focus.first),
-            initialZoom: focus.isEmpty ? 6 : 14,
+            initialZoom: widget.focusZoom ?? (focus.isEmpty ? 6 : 14),
             initialCameraFit:
                 focus.length > 1 && focus.first.metersTo(focus.last) > 1
                 ? CameraFit.bounds(
@@ -68,6 +72,20 @@ class _ErrandMapState extends State<ErrandMap> {
                   ),
                 ],
               ),
+            if (widget.deviceLocation case final DeviceLocation fix)
+              if (fix.accuracyMeters != null)
+                CircleLayer(
+                  circles: [
+                    CircleMarker(
+                      point: latLng(fix),
+                      radius: fix.accuracyMeters!,
+                      useRadiusInMeter: true,
+                      color: const Color(0x222565D6),
+                      borderColor: const Color(0x882565D6),
+                      borderStrokeWidth: 1,
+                    ),
+                  ],
+                ),
             CircleLayer(
               circles: [
                 for (var i = 0; i < points.length; i++)
@@ -77,6 +95,14 @@ class _ErrandMapState extends State<ErrandMap> {
                     borderStrokeWidth: 3,
                     borderColor: Colors.white,
                     color: i == 0 ? teal : const Color(0xFFB25236),
+                  ),
+                if (widget.deviceLocation != null)
+                  CircleMarker(
+                    point: latLng(widget.deviceLocation!),
+                    radius: 7,
+                    borderStrokeWidth: 3,
+                    borderColor: Colors.white,
+                    color: const Color(0xFF2565D6),
                   ),
               ],
             ),

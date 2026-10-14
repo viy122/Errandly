@@ -794,36 +794,6 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
         const SizedBox(height: 20),
-        if (s.isDemoAccount)
-          Panel(
-            color: const Color(0xFFFAF5E9),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Try both sides of an errand',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Switch demo accounts to follow a request or confirm a delivery.',
-                  style: TextStyle(color: muted, fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final id in ['ben', 'anna', 'maria', 'joshua'])
-                      OutlinedButton(
-                        onPressed: () => s.quietly(() => s.demo(id)),
-                        child: Text(s.users[id]!.firstName),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
         const SizedBox(height: 20),
         TextButton.icon(
           onPressed: () => openGuide(context),
@@ -1038,7 +1008,7 @@ class FriendsPage extends StatelessWidget {
                             store.quietly(() => store.toggleFriend(u.id)),
                         child: const Text('Add friend'),
                       ),
-                    if (store.friendIds.contains(u.id))
+                    if (store.friendIds.contains(u.id) && !store.runnerMode)
                       FilledButton(
                         onPressed: () async {
                           store.preferredRunnerId = u.id;

@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../state/errand_store.dart';
+import '../models/geo.dart';
 import 'components.dart';
 
 Future<void> chooseListingArea(BuildContext context, ErrandStore store) async {
-  final selected = await sheet<String>(context, _AreaSearch(store: store));
-  if (selected != null) store.setBrowseArea(selected);
+  final account = store.currentId;
+  final selected = await sheet<Object>(context, _AreaSearch(store: store));
+  if (account != store.currentId) return;
+  if (selected is GeoPoint) {
+    store.setBrowsingPosition(selected);
+    store.setBrowseNearby(true);
+  } else if (selected is String) {
+    store.setBrowseArea(selected);
+  }
 }
 
 class LocationPicker extends StatelessWidget {
@@ -25,7 +33,9 @@ class LocationPicker extends StatelessWidget {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                store.browseArea,
+                store.browseNearby
+                    ? 'Nearby · ${store.nearbyRadiusKm.toInt()} km'
+                    : store.browseArea,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 12,
@@ -51,6 +61,24 @@ class _AreaSearch extends StatefulWidget {
 
 class _AreaSearchState extends State<_AreaSearch> {
   String query = '';
+  bool locating = false;
+  String? locationError;
+  Future<void> locate() async {
+    if (locating) return;
+    setState(() {
+      locating = true;
+      locationError = null;
+    });
+    try {
+      final point = await widget.store.maps.currentPosition();
+      if (mounted) Navigator.pop(context, point);
+    } on StateError catch (e) {
+      if (mounted) setState(() => locationError = e.message);
+    } finally {
+      if (mounted) setState(() => locating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final areas = widget.store.areaOptions
@@ -85,6 +113,19 @@ class _AreaSearchState extends State<_AreaSearch> {
             onChanged: (v) => setState(() => query = v),
           ),
           const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: locating ? null : locate,
+            icon: const Icon(Icons.my_location, size: 18),
+            label: Text(
+              locating ? 'Finding your location…' : 'Use my current location',
+            ),
+          ),
+          if (locating) const LinearProgressIndicator(),
+          if (locationError != null)
+            Text(
+              locationError!,
+              style: const TextStyle(fontSize: 11, color: Color(0xFFAD5743)),
+            ),
           const Text(
             'Areas come from posted errands. Select All locations to browse everywhere.',
             style: TextStyle(fontSize: 11, color: muted),
@@ -101,10 +142,14 @@ class _AreaSearchState extends State<_AreaSearch> {
                   for (final area in areas)
                     ListTile(
                       title: Text(area),
-                      trailing: area == widget.store.browseArea
+                      trailing:
+                          !widget.store.browseNearby &&
+                              area == widget.store.browseArea
                           ? const Icon(Icons.check, color: teal)
                           : null,
-                      onTap: () => Navigator.pop(context, area),
+                      onTap: locating
+                          ? null
+                          : () => Navigator.pop(context, area),
                     ),
                 ],
               ),

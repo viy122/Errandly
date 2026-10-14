@@ -6,6 +6,11 @@ import 'components.dart';
 import 'role_dashboard.dart';
 import 'errand_card.dart';
 import 'feed_sort.dart';
+import 'details.dart';
+import 'map_point_picker.dart';
+import '../models/geo.dart';
+import 'errand_map.dart';
+import 'location_status.dart';
 
 class Marketplace extends StatefulWidget {
   const Marketplace({
@@ -29,26 +34,263 @@ class _MarketplaceState extends State<Marketplace> {
   bool refreshing = false;
   bool locating = false;
   String? locationError;
-  Future<void> changeSort(String value) async {
-    if (value == 'Nearest to me' && s.browsingPosition == null) {
-      final account = s.currentId;
-      setState(() {
-        locating = true;
-        locationError = null;
-      });
-      try {
-        final position = await s.maps.currentPosition();
-        if (!mounted || account != s.currentId) return;
-        s.setBrowsingPosition(position);
-      } on StateError catch (e) {
-        if (mounted) setState(() => locationError = e.message);
-        return;
-      } finally {
-        if (mounted) setState(() => locating = false);
+  int locationRevision = 0;
+  late bool previousNearby;
+  @override
+  void initState() {
+    super.initState();
+    previousNearby = s.browseNearby;
+    if (s.browsingPosition != null) sort = 'Nearest to me';
+  }
+
+  Future<bool> readPosition() async {
+    if (locating) return false;
+    final account = s.currentId;
+    setState(() {
+      locating = true;
+      locationError = null;
+    });
+    try {
+      final position = await s.maps.currentPosition();
+      if (!mounted || account != s.currentId) return false;
+      s.setBrowsingPosition(position);
+      locationRevision++;
+      return true;
+    } on StateError catch (e) {
+      if (mounted && account == s.currentId) {
+        setState(() => locationError = e.message);
       }
+      return false;
+    } finally {
+      if (mounted) setState(() => locating = false);
+    }
+  }
+
+  Future<void> changeSort(String value) async {
+    if (value == 'Nearest to me' &&
+        s.browsingPosition == null &&
+        !await readPosition()) {
+      return;
     }
     if (mounted) setState(() => sort = value);
   }
+
+  void showAllLocations() {
+    s.setBrowseNearby(false);
+    setState(() => locationError = null);
+  }
+
+  Future<void> viewLocation() async {
+    final account = s.currentId;
+    final point = s.browsingPosition;
+    final place = await sheet<MapPlace>(
+      context,
+      MapPointPicker(
+        services: s.maps,
+        title: 'Your location',
+        forBrowsing: true,
+        initial: point,
+        initialAddress: s.browsingPositionLabel ?? '',
+      ),
+    );
+    if (!mounted || account != s.currentId || place == null) return;
+    s.setBrowsingPosition(place.point, label: place.label);
+    setState(() => locationRevision++);
+  }
+
+  Future<void> chooseNearby({bool changeLocation = false}) async {
+    if (locating) return;
+    final account = s.currentId;
+    if (s.browsingPosition == null || changeLocation) {
+      final choice = await sheet<String>(
+        context,
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Find nearby errands',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close nearby location',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const Text(
+                'Choose where to search. Nearby uses distance to pickup pins, not the errand trip length.',
+                style: TextStyle(fontSize: 12, color: muted),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(context, 'gps'),
+                icon: const Icon(Icons.my_location),
+                label: const Text('Use my location'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context, 'map'),
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Choose location on map'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || account != s.currentId || choice == null) return;
+      if (choice == 'gps') {
+        if (!await readPosition()) return;
+      } else {
+        final place = await sheet<MapPlace>(
+          context,
+          MapPointPicker(
+            services: s.maps,
+            title: 'Nearby search location',
+            forBrowsing: true,
+            initial: s.browsingPosition,
+          ),
+        );
+        if (!mounted || account != s.currentId || place == null) return;
+        s.setBrowsingPosition(place.point, label: place.label);
+      }
+    }
+    if (!mounted || account != s.currentId) return;
+    s.setBrowseNearby(true);
+    setState(() {
+      sort = 'Nearest to me';
+      locationError = null;
+    });
+  }
+
+  Widget browseScope() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          for (final nearby in [true, false]) ...[
+            if (!nearby) const SizedBox(width: 8),
+            Expanded(
+              child: Semantics(
+                selected: nearby
+                    ? s.browseNearby
+                    : !s.browseNearby && s.browseArea == 'All locations',
+                child: OutlinedButton(
+                  key: ValueKey(
+                    nearby ? 'feed-scope-nearby' : 'feed-scope-all',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor:
+                        (nearby
+                            ? s.browseNearby
+                            : !s.browseNearby &&
+                                  s.browseArea == 'All locations')
+                        ? pale
+                        : Colors.white,
+                    foregroundColor: ink,
+                  ),
+                  onPressed: locating
+                      ? null
+                      : nearby
+                      ? () => chooseNearby()
+                      : showAllLocations,
+                  child: Text(nearby ? 'Nearby' : 'All locations'),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      if (locating) const LinearProgressIndicator(),
+      if (s.browseNearby) ...[
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Within ', style: TextStyle(fontSize: 12)),
+                DropdownButton<double>(
+                  key: const ValueKey('nearby-radius'),
+                  value: s.nearbyRadiusKm,
+                  items: [
+                    for (final km in [5.0, 10.0, 25.0])
+                      DropdownMenuItem(
+                        value: km,
+                        child: Text('${km.toInt()} km'),
+                      ),
+                  ],
+                  onChanged: locating ? null : (v) => s.setNearbyRadius(v!),
+                ),
+              ],
+            ),
+            TextButton(
+              onPressed: locating
+                  ? null
+                  : () => chooseNearby(changeLocation: true),
+              child: const Text('Change location'),
+            ),
+          ],
+        ),
+        Text(
+          'Near ${s.browsingPositionLabel} · straight-line distance to pickup',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 11, color: muted),
+        ),
+        if (s.browsingPosition case final GeoPoint point) ...[
+          LocationStatus(point: point),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 170,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: ErrandMap(
+                key: ValueKey('browse-position-$locationRevision'),
+                points: [point],
+                deviceLocation: point is DeviceLocation ? point : null,
+                focusZoom: 17,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: locating ? null : viewLocation,
+            icon: const Icon(Icons.my_location, size: 16),
+            label: const Text('View or refine my location'),
+          ),
+        ],
+        if (s.runnerListingsEverywhere.any((e) => e.pickupPoint == null))
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Posts without pickup pins are available in All locations.',
+              style: TextStyle(fontSize: 11, color: muted),
+            ),
+          ),
+      ] else ...[
+        const SizedBox(height: 6),
+        Text(
+          s.browseArea == 'All locations'
+              ? 'Browse across all areas, including posts without pickup pins.'
+              : 'Listing area: ${s.browseArea}. Choose All locations to browse everywhere.',
+          style: const TextStyle(fontSize: 11, color: muted),
+        ),
+      ],
+      const SizedBox(height: 12),
+    ],
+  );
 
   Future<void> refreshFeed() async {
     setState(() => refreshing = true);
@@ -61,9 +303,55 @@ class _MarketplaceState extends State<Marketplace> {
   }
 
   ErrandStore get s => widget.store;
+  Widget livePostPreview() => Panel(
+    key: const ValueKey('live-post-preview'),
+    padding: 16,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Your live posts',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Visible to other runners. You cannot accept your own errand.',
+          style: TextStyle(fontSize: 12, color: muted),
+        ),
+        for (final e in s.liveRequests) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e.title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      e.area,
+                      style: const TextStyle(fontSize: 11, color: muted),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => openDetails(context, s, e),
+                child: const Text('View request'),
+              ),
+            ],
+          ),
+        ],
+      ],
+    ),
+  );
   @override
   void didUpdateWidget(covariant Marketplace oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (s.browseNearby && !previousNearby) sort = 'Nearest to me';
+    previousNearby = s.browseNearby;
     if (sort == 'Nearest to me' && s.browsingPosition == null && !locating) {
       sort = 'Newest';
     }
@@ -429,6 +717,11 @@ class _MarketplaceState extends State<Marketplace> {
                       ),
                       const SizedBox(height: 10),
                     ],
+                    if (!widget.savedOnly && s.liveRequests.isNotEmpty) ...[
+                      livePostPreview(),
+                      const SizedBox(height: 16),
+                    ],
+                    if (!widget.savedOnly) browseScope(),
                     if (!small || widget.savedOnly)
                       Row(
                         key: feedKey,
@@ -459,53 +752,34 @@ class _MarketplaceState extends State<Marketplace> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: categories
-                            .map(
-                              (c) => Padding(
-                                padding: const EdgeInsets.only(right: 7),
-                                child: ChoiceChip(
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (!small)
-                                        Icon(
-                                          categoryIcon(c),
-                                          size: 14,
-                                          color: category == c
-                                              ? Colors.white
-                                              : muted,
-                                        ),
-                                      if (!small) const SizedBox(width: 6),
-                                      Text(c),
-                                    ],
-                                  ),
-                                  selected: category == c,
-                                  onSelected: (_) =>
-                                      setState(() => category = c),
-                                  showCheckmark: false,
-                                  selectedColor: teal,
-                                  backgroundColor: Colors.white,
-                                  labelStyle: TextStyle(
-                                    fontSize: 11,
-                                    color: category == c ? Colors.white : muted,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 8,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
+                    DropdownButtonFormField<String>(
+                      key: const ValueKey('feed-category'),
+                      initialValue: category,
+                      isExpanded: true,
+                      menuMaxHeight: 360,
+                      decoration: const InputDecoration(
+                        labelText: 'Category',
+                        prefixIcon: Icon(Icons.category_outlined, size: 20),
                       ),
+                      items: [
+                        for (final c in categories)
+                          DropdownMenuItem(
+                            value: c,
+                            child: Text(
+                              c == 'All' ? 'All categories' : c,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setState(() => category = value);
+                      },
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Flexible(
+                        Expanded(
                           child: FeedSortControl(
                             value: sort,
                             small: small,
@@ -513,7 +787,6 @@ class _MarketplaceState extends State<Marketplace> {
                             onChanged: changeSort,
                           ),
                         ),
-                        const Spacer(),
                         IconButton(
                           tooltip: 'Refresh errands',
                           onPressed: refreshing ? null : refreshFeed,
@@ -533,27 +806,42 @@ class _MarketplaceState extends State<Marketplace> {
                           color: Color(0xFFAD5743),
                         ),
                       ),
-                    if (sort == 'Nearest to me') ...[
-                      const Text(
-                        'Nearest uses straight-line distance to pickup. Posts without a pickup pin appear last.',
+                    if (sort == 'Nearest to me' && !s.browseNearby) ...[
+                      Text(
+                        'Closest pickups first, near ${s.browsingPositionLabel}. Posts without pins appear last.',
                         style: TextStyle(fontSize: 11, color: muted),
                       ),
                       TextButton.icon(
                         onPressed: locating
                             ? null
-                            : () {
-                                s.setBrowsingPosition(null);
-                                changeSort('Nearest to me');
+                            : () async {
+                                if (await readPosition() && mounted) {
+                                  setState(() => sort = 'Nearest to me');
+                                }
                               },
                         icon: const Icon(Icons.my_location, size: 16),
                         label: const Text('Update my location'),
                       ),
+                      TextButton.icon(
+                        onPressed: locating ? null : viewLocation,
+                        icon: const Icon(Icons.map_outlined, size: 16),
+                        label: const Text('View location on map'),
+                      ),
                     ],
                     const SizedBox(height: 12),
                     if (list.isEmpty)
-                      const Empty(
-                        'No errands here yet',
-                        'Try another category, area, or search. Your next opportunity is out there.',
+                      Empty(
+                        'No errands to accept',
+                        s.browseNearby && !widget.savedOnly
+                            ? 'No matching errands within ${s.nearbyRadiusKm.toInt()} km. Increase the radius or browse All locations.'
+                            : s.liveRequests.isNotEmpty && !widget.savedOnly
+                            ? 'Your own posts are shown above. Errands from other requesters will appear here.'
+                            : 'Try another category, area, or search. Your next opportunity is out there.',
+                      ),
+                    if (list.isEmpty && s.browseNearby && !widget.savedOnly)
+                      TextButton(
+                        onPressed: showAllLocations,
+                        child: const Text('Show all locations'),
                       ),
                     if (refreshing)
                       const FeedSkeleton()

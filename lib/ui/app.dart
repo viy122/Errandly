@@ -9,7 +9,6 @@ import 'marketplace.dart';
 import 'post_form.dart';
 import 'account.dart';
 import 'details.dart';
-import 'demo_account_toggle.dart';
 import 'location_picker.dart';
 import 'role_dashboard.dart';
 import 'mobile_header.dart';
@@ -98,6 +97,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   final scroll = ScrollController();
   Timer? expiry;
   bool foreground = true;
+  late bool previousRunnerMode;
+  String? previousAccount;
   ErrandStore get s => widget.store;
   List<String> get names => [
     s.runnerMode ? 'Find errands' : 'Home',
@@ -126,6 +127,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    previousRunnerMode = s.runnerMode;
+    previousAccount = s.currentId;
     WidgetsBinding.instance.addObserver(this);
     expiry = Timer.periodic(const Duration(seconds: 5), (_) {
       if (foreground) unawaited(s.reload());
@@ -149,7 +152,18 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant Shell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (page == 2 && s.runnerMode) page = 1;
+    var resetScroll = previousAccount != s.currentId;
+    if (s.runnerMode && !previousRunnerMode && (page == 1 || page == 2)) {
+      page = 0;
+      resetScroll = true;
+    }
+    previousRunnerMode = s.runnerMode;
+    previousAccount = s.currentId;
+    if (resetScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && scroll.hasClients) scroll.jumpTo(0);
+      });
+    }
   }
 
   void navigate(int v) {
@@ -169,7 +183,13 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       : page;
 
   void postRequest() {
-    s.setMode(false);
+    if (s.runnerMode) {
+      toast(
+        context,
+        'Log out and choose Requester at login to post an errand.',
+      );
+      return;
+    }
     navigate(2);
   }
 
@@ -360,6 +380,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     0 =>
       s.runnerMode
           ? Marketplace(
+              key: ValueKey('runner-feed-${s.currentId}'),
               store: s,
               onPost: postRequest,
               onWallet: () => navigate(3),
@@ -372,7 +393,11 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
               onWallet: () => navigate(3),
             ),
     1 => MyErrands(store: s, onFind: () => navigate(0), onPost: postRequest),
-    2 => PostForm(store: s, onPublished: () => navigate(1)),
+    2 => PostForm(
+      key: ValueKey('post-${s.currentId}'),
+      store: s,
+      onPublished: () => navigate(1),
+    ),
     3 => WalletPage(store: s),
     4 => ProfilePage(
       store: s,
@@ -382,6 +407,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     ),
     5 => MessagesPage(store: s),
     6 => Marketplace(
+      key: ValueKey('saved-feed-${s.currentId}'),
       store: s,
       onPost: postRequest,
       onWallet: () => navigate(3),
@@ -479,14 +505,6 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                               sheet(context, NotificationsSheet(store: s)),
                           onWallet: () => navigate(3),
                         ),
-                      if (!desktop && s.isDemoAccount)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 2,
-                          ),
-                          child: DemoAccountToggle(store: s, compact: true),
-                        ),
                       if (desktop)
                         Container(
                           height: 82,
@@ -528,31 +546,6 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                                 onTap: () => navigate(4),
                                 child: Avatar(s.user, size: 36),
                               ),
-                            ],
-                          ),
-                        ),
-                      if (desktop)
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: desktop ? 32 : 18,
-                            vertical: 10,
-                          ),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            border: Border(bottom: BorderSide(color: line)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  SizedBox(
-                                    width: 220,
-                                    child: RoleModeSwitch(store: s),
-                                  ),
-                                ],
-                              ),
-                              if (s.isDemoAccount) DemoAccountToggle(store: s),
                             ],
                           ),
                         ),
